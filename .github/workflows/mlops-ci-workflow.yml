@@ -68,4 +68,11 @@ jobs:
       with:
         context: .
         push: true
-        tags: thenuste/fastapi:v1.1
+        tags: thenuste/hpp-fastapi:v1.1
+    
+    - name: Build and push Streamlit Docker image
+      uses: docker/build-push-action@v7
+      with:
+        context: ./streamlit_app/
+        push: true
+        tags: thenuste/hpp-streamlit:v1.1
