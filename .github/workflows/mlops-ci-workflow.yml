@@ -46,3 +46,6 @@ jobs:
         --models-dir models \
         --mlflow-tracking-uri http://localhost:5555
    
+    - name: Stop MLflow Tracking Server
+      run: |
+        docker compose -f deployment/mlflow/docker-compose.yaml down
