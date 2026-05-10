@@ -34,6 +34,10 @@ jobs:
         --output data/processed/featured_house_data.csv \
         --preprocessor models/trained/preprocessor.pkl
     
+    - name: Start MLflow Tracking Server
+      run: |
+        docker-compose -f deployment/mlflow/docker-compose.yaml up -d
+    
     - name: Run Model Training
       run: |
         python src/models/train_model.py \
