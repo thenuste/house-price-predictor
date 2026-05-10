@@ -36,7 +36,7 @@ jobs:
     
     - name: Start MLflow Tracking Server
       run: |
-        docker-compose -f deployment/mlflow/docker-compose.yaml up -d
+        docker compose -f deployment/mlflow/docker-compose.yaml up -d
     
     - name: Run Model Training
       run: |
