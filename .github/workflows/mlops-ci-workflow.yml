@@ -1,9 +1,10 @@
 name: ML Ops CI
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
+  workflow_dispatch: {}
 jobs:
   model-training:
     environment: test_env
@@ -68,11 +69,11 @@ jobs:
       with:
         context: .
         push: true
-        tags: thenuste/hpp-fastapi:v1.1
+        tags: thenuste/hpp-fastapi:{{ github.sha }}
     
     - name: Build and push Streamlit Docker image
       uses: docker/build-push-action@v7
       with:
         context: ./streamlit_app/
         push: true
-        tags: thenuste/hpp-streamlit:v1.1
+        tags: thenuste/hpp-streamlit:{{ github.sha }}

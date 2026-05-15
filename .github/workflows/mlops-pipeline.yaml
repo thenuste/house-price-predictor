@@ -1,0 +1,195 @@
+name: MLOps Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_all:
+        description: 'Run all jobs in the MLOps pipeline'
+        required: false
+        default: 'true'
+      run_data_processing:
+        description: 'Run data processing job'
+        required: false
+        default: 'false'
+      run_model_training:
+        description: 'Run model training job'
+        required: false
+        default: 'false'
+      run_build_and_push_docker_images:
+        description: 'Run Docker image build and push job'
+        required: false
+        default: 'false'
+  release:
+    types: [created]
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  data_processing:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.11.15'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Data Processing
+      run: |
+        python src/data/run_processing.py \
+        --input data/raw/house_data.csv  \
+        --output data/processed/cleaned_house_data.csv
+    
+    - name: Run Feature Engineering
+      run: |
+        python src/features/engineer.py \
+        --input data/processed/cleaned_house_data.csv \
+        --output data/processed/featured_house_data.csv \
+        --preprocessor models/trained/preprocessor.pkl
+
+    - name: Upload processed data as artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: processed-data
+        path: data/processed/featured_house_data.csv
+    
+    - name: Upload preprocessor as artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: preprocessor
+        path: models/trained/preprocessor.pkl
+  
+  model_training:
+    needs: data_processing
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.11.15'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Download processed data artifact
+      uses: actions/download-artifact@v7
+      with:
+        name: processed-data
+        path: data/processed/
+    
+    - name: Download preprocessor artifact
+      uses: actions/download-artifact@v7
+      with:
+        name: preprocessor
+        path: models/trained/
+    
+    - name: Start MLflow Tracking Server
+      run: |
+        docker compose -f deployment/mlflow/docker-compose.yaml up -d
+    
+    - name: Wait for MLflow Tracking Server to be ready
+      run: |
+        echo "Waiting for MLflow Tracking Server to be ready..."
+        until curl -s http://localhost:5555/health | grep "status" | grep "healthy"; do
+          echo "MLflow Tracking Server is not ready yet. Retrying in 5 seconds..."
+          sleep 5
+        done
+        echo "MLflow Tracking Server is ready!"
+    - name: Run Model Training
+      run: |
+        python src/models/train_model.py \
+        --config configs/model_config.yaml \
+        --data data/processed/featured_house_data.csv \
+        --models-dir models \
+        --mlflow-tracking-uri http://localhost:5555
+    
+    - name: Upload trained model as artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: trained-model
+        path: models/trained/house_price_model.pkl
+
+    - name: Stop MLflow Tracking Server
+      run: |
+        docker compose -f deployment/mlflow/docker-compose.yaml down
+
+  build_and_push_docker_images:
+    needs: model_training
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+    
+    - name: Download trained model artifact
+      uses: actions/download-artifact@v7
+      with:
+        name: trained-model
+        path: models/trained/
+    
+    - name: Download preprocessor artifact
+      uses: actions/download-artifact@v7
+      with:
+        name: preprocessor
+        path: models/trained/
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v4
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Build and test Docker image
+      run: |
+        COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        docker build -t docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-fastapi:${COMMIT_SHA} -f Dockerfile .
+        docker run -d -p 8000:8000 --name hpp-fastapi-test docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-fastapi:${COMMIT_SHA}
+        for i in {1..10}; do
+          if curl -s http://localhost:8000/health | grep "status" | grep "healthy"; then
+            echo "Container is healthy!"
+            break
+          else
+            echo "Container is not healthy yet. Retrying in 5 seconds..."
+            sleep 5
+          fi
+        done
+        docker logs hpp-fastapi-test
+      
+    - name: Cleanup test container
+      run: |
+        docker stop hpp-fastapi-test
+        docker rm hpp-fastapi-test
+        
+    - name: Push FastAPI Docker image
+      run: |
+        COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        docker push docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-fastapi:${COMMIT_SHA}
+
+    - name: Build and push Streamlit Docker image
+      uses: docker/build-push-action@v7
+      with:
+        context: ./streamlit_app/
+        push: true
+        environment-variables: |
+          COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+        tags: docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-streamlit:${COMMIT_SHA}
