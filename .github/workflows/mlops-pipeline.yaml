@@ -186,11 +186,13 @@ jobs:
         COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
         docker push docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-fastapi:${COMMIT_SHA}
 
+    - name: Set short SHA
+      id: vars
+      run: echo "sha_short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
     - name: Build and push Streamlit Docker image
-      uses: docker/build-push-action@v7
+      uses: docker/build-push-action@v6
       with:
         context: ./streamlit_app/
         push: true
-        environment-variables: |
-          COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-        tags: docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-streamlit:${COMMIT_SHA}
+        tags: docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-streamlit:${{ steps.vars.outputs.sha_short }}
