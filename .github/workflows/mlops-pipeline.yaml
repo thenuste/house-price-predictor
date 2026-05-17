@@ -163,7 +163,7 @@ jobs:
     - name: Build and test Docker image
       run: |
         COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-        docker build -t docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-fastapi:${COMMIT_SHA} -f Dockerfile .
+        docker build --platform linux/arm64 -t docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-fastapi:${COMMIT_SHA} -f Dockerfile .
         docker run -d -p 8000:8000 --name hpp-fastapi-test docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-fastapi:${COMMIT_SHA}
         for i in {1..10}; do
           if curl -s http://localhost:8000/health | grep "status" | grep "healthy"; then
@@ -195,4 +195,12 @@ jobs:
       with:
         context: ./streamlit_app/
         push: true
+        build-args: |
+          PLATFORM=linux/arm64
         tags: docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-streamlit:${{ steps.vars.outputs.sha_short }}
+
+    # - name: Build and push Streamlit Docker image
+    #   run: |
+    #     COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+    #     docker build --platform linux/arm64 -t docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-streamlit:${COMMIT_SHA} -f streamlit_app/Dockerfile ./streamlit_app/
+    #     docker push docker.io/${{ vars.DOCKERHUB_USERNAME }}/hpp-streamlit:${COMMIT_SHA}
