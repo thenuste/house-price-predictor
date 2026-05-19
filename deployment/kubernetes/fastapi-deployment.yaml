@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: fastapi
-          image: thenuste/hpp-fastapi:b71496c
+          image: thenuste/hpp-fastapi:19c69e8
           ports:
             - containerPort: 8000
 ---
