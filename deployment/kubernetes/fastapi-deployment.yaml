@@ -3,10 +3,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fastapi
+  namespace: hpp
   labels:
     app: fastapi
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: fastapi
@@ -20,11 +21,21 @@ spec:
           image: thenuste/hpp-fastapi:19c69e8
           ports:
             - containerPort: 8000
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: fastapi
+  namespace: hpp
+  labels:
+    app: fastapi
 spec:
   type: NodePort
   selector:
@@ -34,3 +45,4 @@ spec:
       port: 8000
       targetPort: 8000
       nodePort: 30100
+      name: http
